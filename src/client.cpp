@@ -39,7 +39,7 @@ class Requestor {
 
     void request_exist(std::string id) {
       fs::path fpath; bool ok = false;
-      for (auto const& f : fs::directory_iterator(index->dpath)) {
+      for (auto const& f : fs::directory_iterator(index->dpath / id)) {
         if (f.path().extension() == "pdf"s) {
           fpath = f; ok = true; break;
         }
@@ -160,7 +160,13 @@ int main(int argc, char *argv[]) {
     exit(1);
   }
 
-	std::filesystem::path srv(argv[2]);
+	fs::path srv(argv[2]);
+  for (auto const& f : fs::directory_iterator(srv)) {
+    std::string fname = f.path().string();
+    if (fname[0] == '.') continue;
+    index.ids.push_back(fname);
+    index.id_set.insert(fname);
+  }
 	// TODO error handling
 
 	std::stringstream req_stream(argv[3]);
