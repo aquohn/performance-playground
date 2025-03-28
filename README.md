@@ -10,6 +10,7 @@ Networking:
 Cache:
 - `std::unordered_map`
 - `khash`
+- Google `sparsehash`
 
 Filesystem:
 - `open`

@@ -1,5 +1,6 @@
-#include <print>
+#include <format>
 #include <cstdlib>
+#include <iostream>
 #include <sstream>
 #include <thread>
 #include <filesystem>
@@ -17,7 +18,7 @@ int port;
 
 int main(int argc, char* argv[]) {
 	if (argc != 3) {
-		std::print("Usage: {} <port> <content directory>", argv[0]);
+		std::cout << std::format("Usage: {} <port> <content directory>\n", argv[0]);
 		exit(1);
 	}
 
@@ -30,7 +31,7 @@ int main(int argc, char* argv[]) {
 
 	// TODO networking code
 
-	for (;;) {
+	while (true) {
 		// TODO main loop
 		break;
 	}

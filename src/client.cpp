@@ -1,22 +1,24 @@
 #include <sstream>
 #include <fstream>
 #include <random>
+#include <format>
+#include <iostream>
+#include <thread>
+#include <atomic>
+#include <numeric>
+#include <algorithm>
+
 #include <cstdio>
 #include <cstring>
-#include <print>
-#include <thread>
-#include <chrono>
-
-#include <unistd.h>
-#include <arpa/inet.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <errno.h>
+#include <csignal>
 
 #include "client.hpp"
 
+static std::atomic<int> cleanup = 0;
+
 class Requestor {
   private:
+    Record* record;
     Index const * index;
     struct sockaddr_in const * server_addr;
 
@@ -30,12 +32,12 @@ class Requestor {
     }
 
     void request_exist() {
+      // choose a random id
       std::uniform_int_distribution<size_t> distr(0, index->ids.size() - 1);
       request_exist(index->ids[distr(prng)]);
     }
 
     void request_exist(std::string id) {
-      // choose a random id
       fs::path fpath; bool ok = false;
       for (auto const& f : fs::directory_iterator(index->dpath)) {
         if (f.path().extension() == "pdf"s) {
@@ -52,13 +54,15 @@ class Requestor {
       if (!fstrm) return;
       hash_t fhash = sha256(buf);
 
+      ++(record->real);
       auto startt = std::chrono::steady_clock::now();
       send(sockfd, id.c_str(), id.size(), 0);
       size_t rsz = read(sockfd, buf.data(), fsz);
       auto endt = std::chrono::steady_clock::now();
       hash_t rhash = sha256(buf);
 
-      // TODO keep statistics
+      if (fhash != rhash) ++(record->incorrect);
+      record->rtts.push_back(endt - startt);
     }
 
     void request_rand() {
@@ -66,7 +70,7 @@ class Requestor {
       std::string id;
 
       std::uniform_int_distribution<size_t> distr(0, 35);
-      for (;;) {
+      while (true) {
         for (int i = 0; i < 8; ++i) {
           char c = distr(prng);
           if (c < 10) {
@@ -84,13 +88,15 @@ class Requestor {
       }
 
       std::vector<char> buf(1024);
+      auto startt = std::chrono::steady_clock::now();
       send(sockfd, id.c_str(), id.size(), 0);
       size_t rsz = read(sockfd, buf.data(), 1024 - 1);
-
-      // TODO keep statistics
+      auto endt = std::chrono::steady_clock::now();
+      record->rtts.push_back(endt - startt);
     }
   public:
-    Requestor(Index const * _index, struct sockaddr_in const * _addr) : index(_index), server_addr(_addr) {
+    Requestor(Record * _record, Index const * _index, struct sockaddr_in const * _addr) :
+      record(_record), index(_index), server_addr(_addr) {
       std::random_device rd;
       prng = std::mt19937(rd());
     }
@@ -104,13 +110,14 @@ class Requestor {
     }
 };
 
-void request_thread(ClientConfig config, Index const * index, struct sockaddr_in const * server_addr) {
-  Requestor R(index, server_addr);
+void request_thread(ClientConfig config, Record* record) {
+  std::signal(SIGINT, SIG_IGN);
+  Requestor R(record, config.index, config.server_addr);
   std::random_device rd;
   std::mt19937 prng = std::mt19937(rd());
 
   int rcount = 0;
-  while (rcount != config.reps) {
+  while (!cleanup.load() && rcount != config.reps) {
     R.request();
     ++rcount;
 
@@ -120,34 +127,36 @@ void request_thread(ClientConfig config, Index const * index, struct sockaddr_in
   }
 }
 
+void notify_cleanup(int signum) {
+  cleanup.store(1);
+}
+
 int main(int argc, char *argv[]) {
-  // TODO construct threads for requestors
-  ClientConfig config; Index index;
-  config.sleep_avg_ms = 100., config.sleep_stddev_ms = 50.;
-  struct sockaddr_in addr;
+  Index index; struct sockaddr_in addr{ .sin_family = AF_INET };
+  ClientConfig config{ .sleep_avg_ms = 100., .sleep_stddev_ms = 50.,
+    .index = &index, .server_addr = &addr};
   int reqs, ret;
 
 	if (argc != 5) {
-		std::print(stderr, "Usage: {} <server addr:port> <content directory> <requestors> <reps>", argv[0]);
+		std::cerr << std::format("Usage: {} <server addr:port> <content directory> <requestors> <reps>", argv[0]);
 		exit(1);
 	}
 
-  addr.sin_family = AF_INET;
 	std::string server_str(argv[1]);
   auto delim_it = std::next(server_str.begin(), server_str.find(':'));
   ret = inet_pton(AF_INET, std::string(server_str.begin(), delim_it).data(), &addr.sin_addr);
   if (ret == 0) {
-    std::print(stderr, "Invalid address.");
+    std::cerr << std::format("Invalid address.");
     exit(1);
   } else if (ret < 0) {
-    std::print(stderr, "Address parsing failed with {}", strerror(errno));
+    std::cerr << std::format("Address parsing failed with {}", strerror(errno));
     exit(1);
   }
   ++delim_it;
   std::stringstream port_stream(std::string(delim_it, server_str.end()));
   port_stream >> addr.sin_port;
   if (port_stream.bad() || port_stream.fail()) {
-    std::print(stderr, "Port parsing failed.");
+    std::cerr << std::format("Port parsing failed.");
     exit(1);
   }
 
@@ -162,11 +171,30 @@ int main(int argc, char *argv[]) {
 	rep_stream >> config.reps;
 	// TODO error handling
 
-  std::vector<std::jthread> threads;
+  config.records.resize(reqs);
+  std::signal(SIGINT, notify_cleanup);
+  std::vector<std::jthread> threads; threads.reserve(reqs);
   for (int i = 0; i < reqs; ++i) {
-    // TODO extract statistics on SIGINT or join
-    threads.emplace_back(request_thread, config, &index, &addr);
+    threads.emplace_back(request_thread, config, &(config.records[i]));
   }
+
+  for (int i = 0; i < reqs; ++i) {
+    threads[i].join();
+  }
+  std::vector<double> rtts;
+  long long total = 0, errors = 0;
+  for (auto rec : config.records) {
+    total += rec.real; errors += rec.incorrect;
+    for (auto rtt : rec.rtts) {
+      rtts.push_back(rtt / 1.0ms);
+    }
+  }
+  double rtt_avg = std::accumulate(rtts.begin(), rtts.end(), 0) / ((double) rtts.size());
+  std::for_each(rtts.begin(), rtts.end(), [=](const double x){ return pow(x - rtt_avg, 2); });
+  double rtt_stddev = std::accumulate(rtts.begin(), rtts.end(), 0) / (rtts.size() - 1.5);
+
+  std::cout << std::format("RTT {:2f} +/- {:2f} ms\tErrors {} / {} ({:1f}%)\n", rtt_avg, rtt_stddev,
+      total, errors, (double) total / errors);
 
   return 0;
 }
