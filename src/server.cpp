@@ -2,19 +2,22 @@
 #include <cstdlib>
 #include <iostream>
 #include <sstream>
-#include <thread>
 #include <filesystem>
 
+#include <cstring>
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <sys/epoll.h>
 
+#include "utils.hpp"
 #include "cache.hpp"
 #include "server.hpp"
 
-int port;
+#define MAX_LISTEN_BACKLOG 4096
+
+in_port_t port;
 
 int main(int argc, char* argv[]) {
 	if (argc != 3) {
@@ -24,12 +27,41 @@ int main(int argc, char* argv[]) {
 
 	std::stringstream port_stream(argv[1]);
 	port_stream >> port;
-	// TODO error handling
+  if (port_stream.bad() || port_stream.fail()) {
+    std::cerr << std::format("Port parsing failed.\n");
+    exit(1);
+  }
 
-	std::filesystem::path srv(argv[2]);
-	// TODO error handling
+	fs::path srv(argv[2]);
+	fs::directory_entry srv_ent(srv);
+	if (!srv_ent.is_directory()) {
+		std::cerr << "Data directory path is not a directory.\n";
+		exit(1);
+	}
 
-	// TODO networking code
+	int epollfd = epoll_create1(0);
+	if (epollfd < 0) {
+		std::cerr << std::format("epoll fd construction failed: {}\n", strerror(errno));
+		exit(1);
+	}
+
+	struct sockaddr_in addr{ .sin_family = AF_INET,
+		.sin_port = port, .sin_addr = {.s_addr = INADDR_ANY}};
+  int sockfd = socket(AF_INET, SOCK_STREAM, 0);
+	if (sockfd < 0) {
+		std::cerr << std::format("Socket construction failed: {}\n", strerror(errno));
+		exit(1);
+	}
+	if (bind(sockfd, (struct sockaddr *) &addr, sizeof(addr)) < 0) {
+		std::cerr << std::format("Socket bind failed: {}\n", strerror(errno));
+		close(sockfd);
+		exit(1);
+	}
+	if (listen(sockfd, MAX_LISTEN_BACKLOG) < 0) {
+		std::cerr << std::format("Socket listen failed: {}\n", strerror(errno));
+		close(sockfd);
+		exit(1);
+	}
 
 	while (true) {
 		// TODO main loop

@@ -12,6 +12,8 @@ struct Index {
   fs::path dpath;
   std::vector<std::string> ids;
   std::unordered_set<std::string> id_set;
+
+  Index(fs::path srv);
 };
 
 struct Record {
@@ -21,9 +23,10 @@ struct Record {
 
 struct ClientConfig {
   double sleep_avg_ms, sleep_stddev_ms;
-  int reps;
-  Index* index;
-  struct sockaddr_in* server_addr;
-  std::vector<Record> records;
+  int reqs, reps;
+  Index index;
+  struct sockaddr_in server_addr;
+
+  ClientConfig(char *argv[]);
 };
 

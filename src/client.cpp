@@ -14,7 +14,14 @@
 
 #include "client.hpp"
 
+#define SERVER_RESP_SZ 1
+
 Index::Index(fs::path srv) {
+	fs::directory_entry srv_ent(srv);
+	if (!srv_ent.is_directory()) {
+		std::cerr << "Data directory path is not a directoy.\n";
+		exit(1);
+	}
   for (auto const& f : fs::directory_iterator(srv)) {
     std::string fname = f.path().string();
     if (fname[0] == '.') continue;
@@ -24,6 +31,7 @@ Index::Index(fs::path srv) {
 }
 
 ClientConfig::ClientConfig(char *argv[]) : index(Index(fs::path(argv[2]))) {
+  // TODO getopt for this
   sleep_avg_ms = 100.;
   sleep_stddev_ms = 50.;
   server_addr.sin_family = AF_INET;
@@ -71,12 +79,20 @@ class Requestor {
     struct sockaddr_in const * server_addr;
 
     std::mt19937 prng;
-    int sockfd;
+    int sockfd = -1;
 
     int connect_to_server() {
-      // TODO error handling
       sockfd = socket(AF_INET, SOCK_STREAM, 0);
+      if (sockfd < 0) {
+        std::cerr << std::format("Socket construction failed: {}\n", strerror(errno));
+        exit(1);
+      }
+      // TODO error handling
       return connect(sockfd, (struct sockaddr *) server_addr, sizeof(*server_addr));
+    }
+
+    void close_connection() {
+      if (sockfd >= 0) close(sockfd);
     }
 
     void request_exist() {
@@ -105,11 +121,11 @@ class Requestor {
       ++(record->real);
       auto startt = std::chrono::steady_clock::now();
       send(sockfd, id.c_str(), id.size(), 0);
-      size_t rsz = read(sockfd, buf.data(), fsz);
+      long rsz = read(sockfd, buf.data(), fsz);
       auto endt = std::chrono::steady_clock::now();
       hash_t rhash = sha256(buf);
 
-      if (fhash != rhash) ++(record->incorrect);
+      if (rsz != fsz || fhash != rhash) ++(record->incorrect);
       record->rtts.push_back(endt - startt);
     }
 
@@ -135,12 +151,14 @@ class Requestor {
         break;
       }
 
-      std::vector<char> buf(1024);
+      std::vector<char> buf(SERVER_RESP_SZ + 1);
       auto startt = std::chrono::steady_clock::now();
       send(sockfd, id.c_str(), id.size(), 0);
-      size_t rsz = read(sockfd, buf.data(), 1024 - 1);
+      long rsz = read(sockfd, buf.data(), SERVER_RESP_SZ);
       auto endt = std::chrono::steady_clock::now();
       record->rtts.push_back(endt - startt);
+
+      // TODO check that correct response is returned
     }
   public:
     Requestor(Record * _record, Index const * _index, struct sockaddr_in const * _addr) :
