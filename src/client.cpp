@@ -14,6 +14,54 @@
 
 #include "client.hpp"
 
+Index::Index(fs::path srv) {
+  for (auto const& f : fs::directory_iterator(srv)) {
+    std::string fname = f.path().string();
+    if (fname[0] == '.') continue;
+    ids.push_back(fname);
+    id_set.insert(fname);
+  }
+}
+
+ClientConfig::ClientConfig(char *argv[]) : index(Index(fs::path(argv[2]))) {
+  sleep_avg_ms = 100.;
+  sleep_stddev_ms = 50.;
+  server_addr.sin_family = AF_INET;
+  int ret;
+
+	std::string server_str(argv[1]);
+  auto delim_it = std::next(server_str.begin(), server_str.find(':'));
+  ret = inet_pton(AF_INET, std::string(server_str.begin(), delim_it).data(), &server_addr.sin_addr);
+  if (ret == 0) {
+    std::cerr << std::format("Invalid address.\n");
+    exit(1);
+  } else if (ret < 0) {
+    std::cerr << std::format("Address parsing failed: {}\n", strerror(errno));
+    exit(1);
+  }
+  ++delim_it;
+  std::stringstream port_stream(std::string(delim_it, server_str.end()));
+  port_stream >> server_addr.sin_port;
+  if (port_stream.bad() || port_stream.fail()) {
+    std::cerr << std::format("Port parsing failed.\n");
+    exit(1);
+  }
+
+	std::stringstream req_stream(argv[3]);
+	req_stream >> reqs;
+  if (req_stream.bad() || req_stream.fail()) {
+    std::cerr << std::format("Requestor count parsing failed.\n");
+    exit(1);
+  }
+
+	std::stringstream rep_stream(argv[4]);
+	rep_stream >> reps;
+  if (rep_stream.bad() || rep_stream.fail()) {
+    std::cerr << std::format("Repetition count parsing failed.\n");
+    exit(1);
+  }
+}
+
 static std::atomic<int> cleanup = 0;
 
 class Requestor {
@@ -112,7 +160,7 @@ class Requestor {
 
 void request_thread(ClientConfig config, Record* record) {
   std::signal(SIGINT, SIG_IGN);
-  Requestor R(record, config.index, config.server_addr);
+  Requestor R(record, &(config.index), &(config.server_addr));
   std::random_device rd;
   std::mt19937 prng = std::mt19937(rd());
 
@@ -132,64 +180,25 @@ void notify_cleanup(int signum) {
 }
 
 int main(int argc, char *argv[]) {
-  Index index; struct sockaddr_in addr{ .sin_family = AF_INET };
-  ClientConfig config{ .sleep_avg_ms = 100., .sleep_stddev_ms = 50.,
-    .index = &index, .server_addr = &addr};
-  int reqs, ret;
-
 	if (argc != 5) {
-		std::cerr << std::format("Usage: {} <server addr:port> <content directory> <requestors> <reps>", argv[0]);
+		std::cerr << std::format("Usage: {} <server addr:port> <content directory> <requestor count> <reps>\n", argv[0]);
 		exit(1);
 	}
+  ClientConfig config(argv);
 
-	std::string server_str(argv[1]);
-  auto delim_it = std::next(server_str.begin(), server_str.find(':'));
-  ret = inet_pton(AF_INET, std::string(server_str.begin(), delim_it).data(), &addr.sin_addr);
-  if (ret == 0) {
-    std::cerr << std::format("Invalid address.");
-    exit(1);
-  } else if (ret < 0) {
-    std::cerr << std::format("Address parsing failed with {}", strerror(errno));
-    exit(1);
-  }
-  ++delim_it;
-  std::stringstream port_stream(std::string(delim_it, server_str.end()));
-  port_stream >> addr.sin_port;
-  if (port_stream.bad() || port_stream.fail()) {
-    std::cerr << std::format("Port parsing failed.");
-    exit(1);
-  }
-
-	fs::path srv(argv[2]);
-  for (auto const& f : fs::directory_iterator(srv)) {
-    std::string fname = f.path().string();
-    if (fname[0] == '.') continue;
-    index.ids.push_back(fname);
-    index.id_set.insert(fname);
-  }
-	// TODO error handling
-
-	std::stringstream req_stream(argv[3]);
-	req_stream >> reqs;
-	// TODO error handling
-
-	std::stringstream rep_stream(argv[4]);
-	rep_stream >> config.reps;
-	// TODO error handling
-
-  config.records.resize(reqs);
   std::signal(SIGINT, notify_cleanup);
-  std::vector<std::jthread> threads; threads.reserve(reqs);
-  for (int i = 0; i < reqs; ++i) {
-    threads.emplace_back(request_thread, config, &(config.records[i]));
+  std::vector<std::jthread> threads; threads.reserve(config.reqs);
+  std::vector<Record> records(config.reqs);
+  for (int i = 0; i < config.reqs; ++i) {
+    threads.emplace_back(request_thread, config, &(records[i]));
   }
 
-  for (int i = 0; i < reqs; ++i) {
+  for (int i = 0; i < config.reqs; ++i) {
     threads[i].join();
   }
   std::vector<double> rtts;
   long long total = 0, errors = 0;
-  for (auto rec : config.records) {
+  for (auto rec : records) {
     total += rec.real; errors += rec.incorrect;
     for (auto rtt : rec.rtts) {
       rtts.push_back(rtt / 1.0ms);
