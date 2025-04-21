@@ -1,8 +1,6 @@
 #include <algorithm>
 #include <atomic>
-#include <format>
 #include <fstream>
-#include <iostream>
 #include <numeric>
 #include <random>
 #include <sstream>
@@ -19,8 +17,7 @@
 Index::Index(fs::path srv) {
   fs::directory_entry srv_ent(srv);
   if (!srv_ent.is_directory()) {
-    std::cerr << "Data directory path is not a directory.\n";
-    exit(1);
+    pp::fatal_error("Data directory path is not a directory.\n");
   }
   for (auto const &f : fs::directory_iterator(srv)) {
     std::string fname = f.path().string();
@@ -43,32 +40,27 @@ ClientConfig::ClientConfig(char *argv[]) : index(Index(fs::path(argv[2]))) {
   ret = inet_pton(AF_INET, std::string(server_str.begin(), delim_it).data(),
                   &server_addr.sin_addr);
   if (ret == 0) {
-    std::cerr << std::format("Invalid address.\n");
-    exit(1);
+    pp::fatal_error("Invalid address.\n");
   } else if (ret < 0) {
-    std::cerr << std::format("Address parsing failed: {}\n", strerror(errno));
-    exit(1);
+    pp::fatal_error("Address parsing failed: {}\n", strerror(errno));
   }
   ++delim_it;
   std::stringstream port_stream(std::string(delim_it, server_str.end()));
   port_stream >> server_addr.sin_port;
   if (port_stream.bad() || port_stream.fail()) {
-    std::cerr << std::format("Port parsing failed.\n");
-    exit(1);
+    pp::fatal_error("Port parsing failed.\n");
   }
 
   std::stringstream req_stream(argv[3]);
   req_stream >> reqs;
   if (req_stream.bad() || req_stream.fail()) {
-    std::cerr << std::format("Requestor count parsing failed.\n");
-    exit(1);
+    pp::fatal_error("Requestor count parsing failed.\n");
   }
 
   std::stringstream rep_stream(argv[4]);
   rep_stream >> reps;
   if (rep_stream.bad() || rep_stream.fail()) {
-    std::cerr << std::format("Repetition count parsing failed.\n");
-    exit(1);
+    pp::fatal_error("Repetition count parsing failed.\n");
   }
 }
 
@@ -86,9 +78,7 @@ private:
   int connect_to_server() {
     sockfd = socket(AF_INET, SOCK_STREAM, 0);
     if (sockfd < 0) {
-      std::cerr << std::format("Socket construction failed: {}\n",
-                               strerror(errno));
-      exit(1);
+      pp::fatal_error("Socket construction failed: {}\n", strerror(errno));
     }
     // TODO error handling
     return connect(sockfd, (struct sockaddr *)server_addr,
@@ -135,7 +125,7 @@ private:
     auto endt = std::chrono::steady_clock::now();
     hash_t rhash = sha256(buf);
 
-    if (rsz != (long) fsz || fhash != rhash)
+    if (rsz != (long)fsz || fhash != rhash)
       ++(record->incorrect);
     record->rtts.push_back(endt - startt);
   }
@@ -208,10 +198,9 @@ void notify_cleanup(int signum) { cleanup.store(1); }
 
 int main(int argc, char *argv[]) {
   if (argc != 5) {
-    std::cerr << std::format("Usage: {} <server addr:port> <content directory> "
-                             "<requestor count> <reps>\n",
-                             argv[0]);
-    exit(1);
+    pp::fatal_error("Usage: {} <server addr:port> <content directory> "
+                    "<requestor count> <reps>\n",
+                    argv[0]);
   }
   ClientConfig config(argv);
 
