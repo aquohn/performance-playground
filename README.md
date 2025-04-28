@@ -19,4 +19,14 @@ Filesystem:
 
 ## Compilation and Usage
 
+Building this project requires the following packages:
+
+```
+openssl sparsehash sqlite3
+```
+
+Depending on your distribution, you may need to install the `-devel` versions of these packages.
+
 ## Results
+
+TODO
