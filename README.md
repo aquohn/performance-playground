@@ -9,12 +9,13 @@ Networking:
 
 Cache:
 - None
-- `std::unordered_map` (WIP)
+- `std::unordered_map`
 - `khash` (WIP)
 - Google `sparsehash` (WIP)
 
 Filesystem:
-- `open`
+- `std::filesystem`
+- `open` (WIP)
 - `sqlite` (["SQLite does not compete with client/server databases. SQLite competes with fopen()."](https://www.sqlite.org/whentouse.html#:~:text=SQLite%20competes%20with%20fopen()))
 
 ## Compilation and Usage
