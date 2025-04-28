@@ -83,18 +83,17 @@ void EpollLoop<Map, Cache>::loop(int _sockfd) {
       // client ready for read
       if (evqueue[i].events & EPOLLIN) {
         idbuf.resize(DOC_ID_BUFLEN);
-        int readlen = read(fd, idbuf.data(), DOC_ID_BUFLEN);
+        ll readlen = read(fd, idbuf.data(), DOC_ID_BUFLEN);
         if (readlen < 0) {
           close_conn(fd);
         }
 
         // client ready for write
+        // TODO use cache.sendfile()
       } else if (evqueue[i].events & EPOLLOUT) {
-        DocData doc = cache.get(idbuf);
-        if (doc.len == 0) {
+        ll sent = cache.send(idbuf, fd);
+        if (sent == 0) {
           write(fd, "\0", 1);
-        } else {
-          write(fd, doc.ptr, doc.len);
         }
         close_conn(fd);
 

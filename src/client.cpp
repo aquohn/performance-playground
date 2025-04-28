@@ -98,16 +98,9 @@ private:
 
   void request_exist(std::string id) {
     fs::path fpath;
-    bool ok = false;
-    for (auto const &f : fs::directory_iterator(index->dpath / id)) {
-      if (f.path().extension() == "pdf"s) {
-        fpath = f;
-        ok = true;
-        break;
-      }
-    }
-    if (!ok)
+    if (!find_pdf(index->dpath / id, fpath)) {
       return;
+    }
 
     size_t fsz = fs::file_size(fpath);
     std::vector<char> buf(fsz + 1);
@@ -148,7 +141,7 @@ private:
       break;
     }
 
-    std::vector<char> buf(SERVER_RESP_SZ + 1);
+    std::vector<char> buf(SERVER_RESP_SZ);
     auto startt = std::chrono::steady_clock::now();
     send(sockfd, id.c_str(), id.size(), 0);
     [[maybe_unused]] long rsz = read(sockfd, buf.data(), SERVER_RESP_SZ);
