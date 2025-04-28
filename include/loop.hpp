@@ -22,7 +22,9 @@ LOOP_TEMPLATE
 struct EpollLoop {
   struct epoll_event ev;
   int epollfd, nev, sockfd;
+  Cache cache;
 
+  EpollLoop(fs::path &srv, unsigned int ndocs) : cache(srv, ndocs) {}
   void loop(int _sockfd);
 
 private:
@@ -49,7 +51,6 @@ void EpollLoop<Map, Cache>::loop(int _sockfd) {
   }
 
   Map<int, std::vector<char>> reqmap;
-  Cache cache;
   std::vector<struct epoll_event> evqueue;
   while (true) {
     evqueue.resize(nev);
@@ -92,7 +93,7 @@ void EpollLoop<Map, Cache>::loop(int _sockfd) {
         // TODO use cache.sendfile()
       } else if (evqueue[i].events & EPOLLOUT) {
         ll sent = cache.send(idbuf, fd);
-        if (sent == 0) {
+        if (sent < 0) {
           write(fd, "\0", 1);
         }
         close_conn(fd);

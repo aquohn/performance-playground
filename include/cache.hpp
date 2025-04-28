@@ -1,9 +1,11 @@
 #pragma once
 
-#include <chrono>
 #include <concepts>
 #include <string>
 #include <vector>
+#include <unordered_map>
+
+#include <unistd.h>
 
 #include "utils.hpp"
 
@@ -20,39 +22,64 @@ concept HashMap =
 // TODO make cache look at total size rather than number of docs
 template <typename C>
 concept DocCache =
-    std::default_initializable<C> &&
-    requires(C cache, const std::vector<char> &id, int fd, unsigned int ndocs) {
-      { cache(ndocs) } -> std::same_as<C>;
+    std::constructible_from<C, const fs::path &, unsigned int> &&
+    requires(C cache, const std::vector<char> &id, const int fd) {
       { cache.send(id, fd) } -> std::convertible_to<ll>;
     };
 
 template <typename T>
 concept FileBackend =
-    requires(T backend, const fs::path &srv, const std::string &id,
-             int fd, std::vector<char> &buf) {
-      { backend(srv) } -> std::same_as<T>;
-      { backend.cache(id, fd, buf) } -> std::convertible_to<ll>;
+    std::constructible_from<T, const fs::path &> &&
+    requires(T backend, const fs::path &srv, const std::string &idstr,
+             const int fd, std::vector<char> &buf) {
+      { backend.send_and_cache(idstr, fd, buf) } -> std::convertible_to<ll>;
     };
-
-struct FSBackend {
-  fs::path dpath;
-  FSBackend(const fs::path &srv);
-  ll cache(const std::string &id, const int fd, std::vector<char> &buf);
-};
 
 #define CACHE_TEMPLATE                                                         \
   template <template <typename, typename> typename Map, typename Backend>      \
     requires HashMap<Map, std::string, std::vector<char>> &&                   \
              FileBackend<Backend>
 
-// TODO implement generic cache logic, including LRU thread
+// TODO implement LRU thread with cv to signal need for eviction
 
-// CACHE_TEMPLATE
-// class BaseCache {
-//   unsigned int ndocs;
-//   Map<std::string, std::vector<char>> cache;
-//
-//   public:
-//   FSCache(unsigned int _ndocs);
-//   DocData get(const std::vector<char> &id);
-// };
+CACHE_TEMPLATE
+class BaseCache {
+  unsigned int ndocs;
+  Map<std::string, std::vector<char>> cache;
+  Backend backend;
+
+  public:
+  BaseCache(const fs::path &srv, unsigned int _ndocs) : ndocs(_ndocs), backend(srv) {}
+  ll send(const std::vector<char> &id, const int fd);
+};
+
+CACHE_TEMPLATE
+ll BaseCache<Map, Backend>::send(const std::vector<char> &id, const int fd) {
+  std::string idstr(id.begin(), id.end());
+  if (cache.contains(idstr)) {
+    std::vector<char>& buf = cache[idstr];
+    return write(fd, buf.data(), buf.size());
+  }
+  // TODO proper handling
+  return backend.send_and_cache(idstr, fd, cache[idstr]);
+}
+
+template<typename K, typename V> struct UMap {
+  std::unordered_map<K, V> umap;
+  bool contains(const K& k) {
+    return umap.find(k) == umap.end();
+  }
+  V& operator[](const K& k) {
+    return umap[k];
+  }
+  V& operator[](K&& k) {
+    return umap[k];
+  }
+};
+
+struct FSBackend {
+  fs::path dpath;
+  FSBackend(const fs::path &srv);
+  ll send_and_cache(const std::string &idstr, const int fd, std::vector<char> &buf);
+};
+

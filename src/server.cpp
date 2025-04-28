@@ -50,6 +50,6 @@ int main(int argc, char *argv[]) {
     pp::fatal_error("Socket listen failed: {}\n", strerror(errno));
   }
 
-  // TODO call appropriately templated loop
-
+  EpollLoop<UMap, BaseCache<UMap, FSBackend>> loop(srv, 1000);
+  loop.loop(sockfd);
 }
