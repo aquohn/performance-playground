@@ -23,8 +23,8 @@ concept HashMap =
 template <typename C>
 concept DocCache =
     std::constructible_from<C, const fs::path &, unsigned int> &&
-    requires(C cache, const std::vector<char> &id, const int fd) {
-      { cache.send(id, fd) } -> std::convertible_to<ll>;
+    requires(C cache, const std::string &idstr, const int fd) {
+      { cache.send(idstr, fd) } -> std::convertible_to<ll>;
     };
 
 template <typename T>
@@ -54,8 +54,7 @@ class BaseCache {
 };
 
 CACHE_TEMPLATE
-ll BaseCache<Map, Backend>::send(const std::vector<char> &id, const int fd) {
-  std::string idstr(id.begin(), id.end());
+ll BaseCache<Map, Backend>::send(const std::string &idstr, const int fd) {
   if (cache.contains(idstr)) {
     std::vector<char>& buf = cache[idstr];
     return write(fd, buf.data(), buf.size());

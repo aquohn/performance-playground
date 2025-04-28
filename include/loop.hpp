@@ -83,11 +83,10 @@ void EpollLoop<Map, Cache>::loop(int _sockfd) {
       }
 
       auto events = evqueue[i].events;
-
       // client ready for read
       if (idbuf.size() > 0 && events & EPOLLOUT) {
-        ll sent = cache.send(idbuf, fd);
         std::string idstr(idbuf.begin(), idbuf.end());
+        ll sent = cache.send(idstr, fd);
         if (sent < 0) {
           write(fd, "\0", 1);
         } else {
