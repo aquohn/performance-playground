@@ -5,14 +5,19 @@ OBJDIR = lib/obj
 BUILDDIR = build
 DEBUGDIR = debug
 
-INCS = $(INCDIR)/server.hpp $(INCDIR)/client.hpp $(INCDIR)/utils.hpp
+INCS = $(INCDIR)/server.hpp $(INCDIR)/client.hpp $(INCDIR)/utils.hpp $(INCDIR)/loop.hpp $(INCDIR)/cache.hpp
 
 CPPC = g++
 BASEOBJS = $(OBJDIR)/utils.o $(OBJDIR)/cache.o
 OBJS = $(BASEOBJS)
+ifeq ($(DEBUG), 1)
+	DBGFLAGS = -g -DDEBUG=1
+else
+	DBGFLAGS =
+endif
+
 LIBFLAGS = -lcrypto
-CPPFLAGS = -std=c++20 -Wall -I$(INCDIR) -L$(LIBDIR) $(LIBFLAGS)
-DBGFLAGS = -g
+CPPFLAGS = -std=c++20 -Wall -I$(INCDIR) -L$(LIBDIR) $(LIBFLAGS) $(DBGFLAGS)
 
 .PHONY: all clean
 

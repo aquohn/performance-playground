@@ -29,8 +29,8 @@ struct EpollLoop {
 
 private:
   void close_conn(int fd) {
-    if (epoll_ctl(epollfd, EPOLL_CTL_DEL, sockfd, &ev) < 0) {
-      pp::fatal_error("removing client to epoll failed: {}\n", strerror(errno));
+    if (epoll_ctl(epollfd, EPOLL_CTL_DEL, fd, &ev) < 0) {
+      pp::fatal_error("removing client from epoll failed: {}\n", strerror(errno));
     }
     --nev;
     close(fd);
@@ -49,6 +49,7 @@ void EpollLoop<Map, Cache>::loop(int _sockfd) {
   if (epoll_ctl(epollfd, EPOLL_CTL_ADD, sockfd, &ev) < 0) {
     pp::fatal_error("adding socket to epoll failed: {}\n", strerror(errno));
   }
+  std::cout << "Listening for connections...\n";
 
   Map<int, std::vector<char>> reqmap;
   std::vector<struct epoll_event> evqueue;
@@ -73,7 +74,7 @@ void EpollLoop<Map, Cache>::loop(int _sockfd) {
 
         ev.events = EPOLLIN | EPOLLOUT;
         ev.data.fd = connfd;
-        if (epoll_ctl(epollfd, EPOLL_CTL_ADD, sockfd, &ev) < 0) {
+        if (epoll_ctl(epollfd, EPOLL_CTL_ADD, connfd, &ev) < 0) {
           pp::fatal_error("adding client to epoll failed: {}\n",
                           strerror(errno));
         }
@@ -81,29 +82,34 @@ void EpollLoop<Map, Cache>::loop(int _sockfd) {
         continue;
       }
 
-      // client ready for read
-      if (evqueue[i].events & EPOLLIN) {
-        idbuf.resize(DOC_ID_BUFLEN);
-        ll readlen = read(fd, idbuf.data(), DOC_ID_BUFLEN);
-        if (readlen < 0) {
-          close_conn(fd);
-        }
+      auto events = evqueue[i].events;
 
-        // client ready for write
-        // TODO use cache.sendfile()
-      } else if (evqueue[i].events & EPOLLOUT) {
+      // client ready for read
+      if (idbuf.size() > 0 && events & EPOLLOUT) {
         ll sent = cache.send(idbuf, fd);
+        std::string idstr(idbuf.begin(), idbuf.end());
         if (sent < 0) {
           write(fd, "\0", 1);
+        } else {
+          pp::debug("Sent {} bytes for {}\n", sent, idstr);
         }
         close_conn(fd);
+        idbuf.resize(0);
+
+        // client ready for write
+      } else if (idbuf.size() == 0 && events & EPOLLIN) {
+        idbuf.resize(DOC_ID_BUFLEN);
+        ll readlen = read(fd, idbuf.data(), DOC_ID_BUFLEN);
+        if (readlen <= 0) {
+          close_conn(fd);
+        }
+        idbuf.resize(readlen);
 
       } else {
         std::string idstr(idbuf.begin(), idbuf.end());
-        pp::log_error("epoll error on request for {}\n", idstr);
+        pp::log_error("epoll error (events: {}) on request for {}\n", events, idstr);
         close_conn(fd);
       }
     }
-    break;
   }
 }

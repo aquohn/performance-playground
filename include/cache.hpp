@@ -67,7 +67,7 @@ ll BaseCache<Map, Backend>::send(const std::vector<char> &id, const int fd) {
 template<typename K, typename V> struct UMap {
   std::unordered_map<K, V> umap;
   bool contains(const K& k) {
-    return umap.find(k) == umap.end();
+    return umap.find(k) != umap.end();
   }
   V& operator[](const K& k) {
     return umap[k];

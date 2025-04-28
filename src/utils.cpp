@@ -13,9 +13,9 @@ hash_t sha256(std::vector<char> const &msg) {
   return hashbuf;
 }
 
-bool find_pdf(fs::path dpath, fs::path &fpath) {
+bool find_pdf(const fs::path &dpath, fs::path &fpath) {
   for (auto const &f : fs::directory_iterator(dpath)) {
-    if (f.path().extension() == "pdf"s) {
+    if (f.path().extension() == ".pdf"s) {
       fpath = f.path();
       return true;
     }

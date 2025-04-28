@@ -19,8 +19,11 @@ Index::Index(fs::path srv) {
   if (!srv_ent.is_directory()) {
     pp::fatal_error("Data directory path is not a directory.\n");
   }
+  dpath = srv;
   for (auto const &f : fs::directory_iterator(srv)) {
-    std::string fname = f.path().string();
+    if (!f.is_directory())
+      continue;
+    std::string fname = f.path().filename().string();
     if (fname[0] == '.')
       continue;
     ids.push_back(fname);
@@ -48,7 +51,7 @@ ClientConfig::ClientConfig(char *argv[]) : index(Index(fs::path(argv[2]))) {
   std::stringstream port_stream(std::string(delim_it, server_str.end()));
   port_stream >> server_addr.sin_port;
   if (port_stream.bad() || port_stream.fail()) {
-    pp::fatal_error("Port parsing failed.\n");
+    pp::fatal_error("Port parsing from {} failed.\n", server_str);
   }
 
   std::stringstream req_stream(argv[3]);
@@ -80,7 +83,6 @@ private:
     if (sockfd < 0) {
       pp::fatal_error("Socket construction failed: {}\n", strerror(errno));
     }
-    // TODO error handling
     return connect(sockfd, (struct sockaddr *)server_addr,
                    sizeof(*server_addr));
   }
@@ -103,10 +105,9 @@ private:
     }
 
     size_t fsz = fs::file_size(fpath);
-    std::vector<char> buf(fsz + 1);
+    std::vector<char> buf(fsz);
     std::ifstream fstrm(fpath.c_str(), std::ios::binary);
     fstrm.read(buf.data(), fsz);
-    buf[fsz] = 0;
     if (!fstrm)
       return;
     hash_t fhash = sha256(buf);
@@ -114,12 +115,20 @@ private:
     ++(record->real);
     auto startt = std::chrono::steady_clock::now();
     send(sockfd, id.c_str(), id.size(), 0);
-    long rsz = read(sockfd, buf.data(), fsz);
+    ll rsz = recv(sockfd, buf.data(), fsz, MSG_WAITALL);
     auto endt = std::chrono::steady_clock::now();
     hash_t rhash = sha256(buf);
 
-    if (rsz != (long)fsz || fhash != rhash)
+    if (rsz < 0) {
       ++(record->incorrect);
+      pp::log_error("error on read: {}\n", strerror(errno));
+    } else if (rsz != (ll)fsz) {
+      ++(record->incorrect);
+      pp::log_error("incorrect size for {} (expected {}, got {})\n", id, fsz, rsz);
+    } else if (fhash != rhash) {
+      pp::log_error("corrupted data for {}\n", id);
+      ++(record->incorrect);
+    }
     record->rtts.push_back(endt - startt);
   }
 
@@ -144,7 +153,7 @@ private:
     std::vector<char> buf(SERVER_RESP_SZ);
     auto startt = std::chrono::steady_clock::now();
     send(sockfd, id.c_str(), id.size(), 0);
-    [[maybe_unused]] long rsz = read(sockfd, buf.data(), SERVER_RESP_SZ);
+    [[maybe_unused]] ll rsz = read(sockfd, buf.data(), SERVER_RESP_SZ);
     auto endt = std::chrono::steady_clock::now();
     record->rtts.push_back(endt - startt);
 
@@ -160,11 +169,16 @@ public:
   }
   void request(float p = 0.) {
     float res = std::uniform_real_distribution(0., 1.)(prng);
+    if (connect_to_server() < 0) {
+      pp::log_error("connecting to server failed: {}\n", strerror(errno));
+      return;
+    }
     if (res < p) {
       request_rand();
     } else {
       request_exist();
     }
+    close_connection();
   }
 };
 
@@ -175,7 +189,7 @@ void request_thread(ClientConfig config, Record *record) {
   std::mt19937 prng = std::mt19937(rd());
 
   int rcount = 0;
-  while (!cleanup.load() && rcount != config.reps) {
+  while (!cleanup.load() && rcount < config.reps) {
     R.request();
     ++rcount;
 
@@ -209,7 +223,7 @@ int main(int argc, char *argv[]) {
     threads[i].join();
   }
   std::vector<double> rtts;
-  long long total = 0, errors = 0;
+  ll total = 0, errors = 0;
   for (auto rec : records) {
     total += rec.real;
     errors += rec.incorrect;
@@ -224,9 +238,9 @@ int main(int argc, char *argv[]) {
   double rtt_stddev =
       std::accumulate(rtts.begin(), rtts.end(), 0) / (rtts.size() - 1.5);
 
-  std::cout << std::format("RTT {:2f} +/- {:2f} ms\tErrors {} / {} ({:1f}%)\n",
-                           rtt_avg, rtt_stddev, total, errors,
-                           (double)total / errors);
+  std::cout << std::format("RTT {:.2f} +/- {:.2f} ms\tErrors {} / {} ({:.1f}%)\n",
+                           rtt_avg, rtt_stddev, errors, total,
+                           100 * errors / (double) total);
 
   return 0;
 }
