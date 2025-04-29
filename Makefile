@@ -9,7 +9,7 @@ INCS = $(INCDIR)/server.hpp $(INCDIR)/client.hpp $(INCDIR)/utils.hpp $(INCDIR)/l
 
 CPPC = g++
 BASEOBJS = $(OBJDIR)/utils.o $(OBJDIR)/cache.o
-OBJS = $(BASEOBJS)
+OBJS = $(BASEOBJS) $(OBJDIR)/loop.o
 ifeq ($(DEBUG), 1)
 	DBGFLAGS = -g -DDEBUG=1
 else

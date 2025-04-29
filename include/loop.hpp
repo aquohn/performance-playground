@@ -1,10 +1,15 @@
 #pragma once
 
+#include <condition_variable>
 #include <cstdlib>
-
 #include <cstring>
+#include <mutex>
+#include <queue>
+#include <thread>
+
 #include <sys/epoll.h>
 #include <sys/socket.h>
+#include <sys/timerfd.h>
 #include <unistd.h>
 
 #include "cache.hpp"
@@ -13,27 +18,45 @@
 #define DOC_ID_BUFLEN 32
 #define MAX_LISTEN_BACKLOG 4096
 #define EPOLL_TIMEOUT_MS -1
+#define GC_INTERVAL_MS 1000
 
 #define LOOP_TEMPLATE                                                          \
   template <template <typename, typename> typename Map, typename Cache>        \
     requires HashMap<Map, int, std::vector<char>> && DocCache<Cache>
+
+// possible alternative: timerfd in epoll
+struct SocketGC {
+  std::queue<int> q;
+  std::mutex mtx;
+  std::condition_variable cv;
+
+  void gc();
+};
 
 LOOP_TEMPLATE
 struct EpollLoop {
   struct epoll_event ev;
   int epollfd, nev, sockfd;
   Cache cache;
+  SocketGC sockgc;
+  std::jthread gcthread;
 
-  EpollLoop(fs::path &srv, unsigned int ndocs) : cache(srv, ndocs) {}
+  EpollLoop(fs::path &srv, unsigned int ndocs)
+      : cache(srv, ndocs), gcthread(&SocketGC::gc, &sockgc) {}
   void loop(int _sockfd);
 
 private:
   void close_conn(int fd) {
     if (epoll_ctl(epollfd, EPOLL_CTL_DEL, fd, &ev) < 0) {
-      pp::fatal_error("removing client from epoll failed: {}\n", strerror(errno));
+      pp::fatal_error("removing client from epoll failed: {}\n",
+                      strerror(errno));
     }
     --nev;
-    close(fd);
+    {
+      std::lock_guard lk(sockgc.mtx);
+      sockgc.q.push(fd);
+    }
+    sockgc.cv.notify_one();
   }
 };
 
@@ -83,7 +106,7 @@ void EpollLoop<Map, Cache>::loop(int _sockfd) {
       }
 
       auto events = evqueue[i].events;
-      // client ready for read
+      // client ready for write
       if (idbuf.size() > 0 && events & EPOLLOUT) {
         std::string idstr(idbuf.begin(), idbuf.end());
         ll sent = cache.send(idstr, fd);
@@ -95,7 +118,7 @@ void EpollLoop<Map, Cache>::loop(int _sockfd) {
         close_conn(fd);
         idbuf.resize(0);
 
-        // client ready for write
+        // client ready for read
       } else if (idbuf.size() == 0 && events & EPOLLIN) {
         idbuf.resize(DOC_ID_BUFLEN);
         ll readlen = read(fd, idbuf.data(), DOC_ID_BUFLEN);
@@ -104,9 +127,10 @@ void EpollLoop<Map, Cache>::loop(int _sockfd) {
         }
         idbuf.resize(readlen);
 
-      } else {
+      } else if (events & ~(EPOLLIN | EPOLLOUT)) {
         std::string idstr(idbuf.begin(), idbuf.end());
-        pp::log_error("epoll error (events: {}) on request for {}\n", events, idstr);
+        pp::log_error("epoll error (events: {}) on request for {}\n", events,
+                      idstr);
         close_conn(fd);
       }
     }
