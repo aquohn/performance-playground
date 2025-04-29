@@ -43,6 +43,11 @@ int main(int argc, char *argv[]) {
   if (sockfd < 0) {
     pp::fatal_error("Socket construction failed: {}\n", strerror(errno));
   }
+#ifdef DEBUG
+  if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEPORT, NULL, 0) < 0) {
+    pp::fatal_error("setsockopt failed: {}\n", strerror(errno));
+  }
+#endif
   if (bind(sockfd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
     pp::fatal_error("Socket bind failed: {}\n", strerror(errno));
   }
