@@ -20,7 +20,7 @@ Cache Eviction:
 
 Filesystem:
 - `sendfile`
-- `sqlite` (["SQLite does not compete with client/server databases. SQLite competes with fopen()."](https://www.sqlite.org/whentouse.html#:~:text=SQLite%20competes%20with%20fopen()))
+- `sqlite` (["SQLite does not compete with client/server databases. SQLite competes with fopen()."](https://www.sqlite.org/whentouse.html#:~:text=SQLite%20competes%20with%20fopen())) (WIP)
 
 ## Compilation and Usage
 

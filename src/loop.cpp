@@ -30,7 +30,7 @@ void SocketGC::gc() {
     }
 
     if (q.empty()) {
-      cv.wait(lk, [&] { return !q.empty(); });
+      cv.wait(lk);
     } else {
       lk.unlock();
       std::this_thread::sleep_for(

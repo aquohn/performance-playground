@@ -11,6 +11,7 @@ using namespace std::literals;
 
 typedef std::vector<unsigned char> hash_t;
 typedef long long ll;
+typedef unsigned long long ull;
 
 hash_t sha256(std::vector<char> const &msg);
 bool find_pdf(const fs::path &dpath, fs::path &fpath);

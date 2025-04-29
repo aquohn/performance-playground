@@ -17,6 +17,7 @@
 
 in_port_t port;
 
+// TODO getopt for different components
 // TODO create hierarchical templated switches for choosing components
 
 int main(int argc, char *argv[]) {
@@ -55,6 +56,6 @@ int main(int argc, char *argv[]) {
     pp::fatal_error("Socket listen failed: {}\n", strerror(errno));
   }
 
-  EpollLoop<UMap, BaseCache<UMap, FSBackend>> loop(srv, 1000);
+  EpollLoop<UMap, MutexCache<UMap, FSBackend>> loop(srv, 100);
   loop.loop(sockfd);
 }
