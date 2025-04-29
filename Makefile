@@ -5,10 +5,10 @@ OBJDIR = lib/obj
 BUILDDIR = build
 DEBUGDIR = debug
 
-INCS = $(INCDIR)/server.hpp $(INCDIR)/client.hpp $(INCDIR)/utils.hpp $(INCDIR)/loop.hpp $(INCDIR)/cache.hpp
+INCS = $(INCDIR)/server.hpp $(INCDIR)/client.hpp $(INCDIR)/utils.hpp $(INCDIR)/loop.hpp $(INCDIR)/cache.hpp $(INCDIR)/backend.hpp
 
 CPPC = g++
-BASEOBJS = $(OBJDIR)/utils.o $(OBJDIR)/cache.o
+BASEOBJS = $(OBJDIR)/utils.o $(OBJDIR)/backend.o
 OBJS = $(BASEOBJS) $(OBJDIR)/loop.o
 ifeq ($(DEBUG), 1)
 	DBGFLAGS = -g -DDEBUG=1
