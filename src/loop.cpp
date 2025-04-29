@@ -5,8 +5,10 @@
 #include "loop.hpp"
 
 void SocketGC::gc() {
+  std::unique_lock lk(mtx);
   while (true) {
-    std::unique_lock lk(mtx);
+    // possible alternative: release and reacquire mutex after each fd is closed
+    // may decrease latency but not sure if will lead to fd starvation at scale
     while (!q.empty()) {
       int fd = q.front();
       int rem;
@@ -33,6 +35,7 @@ void SocketGC::gc() {
       lk.unlock();
       std::this_thread::sleep_for(
           std::chrono::duration<double, std::milli>{GC_INTERVAL_MS});
+      lk.lock();
     }
   }
 }
