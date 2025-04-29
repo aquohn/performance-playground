@@ -1,3 +1,5 @@
+#include <cstring>
+
 #include <sys/sendfile.h>
 #include <fcntl.h>
 
@@ -14,21 +16,25 @@ ll FSBackend::send_and_cache(const std::string &idstr, const int fd, std::vector
   size_t fsz = fs::file_size(fpath);
   int filefd = open(fpath.c_str(), O_RDONLY);
   if (filefd < 0) {
+    pp::log_error("Error opening {}: {}\n", fpath.string(), strerror(errno));
     return -1;
   }
 
   ll sent = sendfile(fd, filefd, NULL, fsz);
   if (sent < 0) {
+    pp::log_error("Error sending {}: {}\n", fpath.string(), strerror(errno));
     close(filefd);
     return -1;
   }
 
   if (lseek(filefd, 0, SEEK_SET) < 0) {
+    pp::log_error("Error seeking {}: {}\n", fpath.string(), strerror(errno));
     close(filefd);
     return -1;
   }
   buf.resize(fsz);
   if (read(filefd, buf.data(), fsz) < 0) {
+    pp::log_error("Error reading {}: {}\n", fpath.string(), strerror(errno));
     close(filefd);
     return -1;
   }

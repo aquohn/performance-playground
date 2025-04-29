@@ -40,6 +40,7 @@ struct EpollLoop {
   Cache cache;
   SocketGC sockgc;
   std::jthread gcthread;
+  ll handled = 0;
 
   EpollLoop(fs::path &srv, unsigned int ndocs)
       : cache(srv, ndocs), gcthread(&SocketGC::gc, &sockgc) {}
@@ -57,6 +58,7 @@ private:
       sockgc.q.push(fd);
     }
     sockgc.cv.notify_one();
+    handled += 1;
   }
 };
 
@@ -134,5 +136,6 @@ void EpollLoop<Map, Cache>::loop(int _sockfd) {
         close_conn(fd);
       }
     }
+    std::cout << std::format("num requests handled: {}\r", handled);
   }
 }

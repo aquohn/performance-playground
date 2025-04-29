@@ -8,25 +8,33 @@ Networking:
 - `io_uring` (WIP)
 
 Cache:
-- None
 - `std::unordered_map`
+- None (WIP)
 - `khash` (WIP)
 - Google `sparsehash` (WIP)
 
+Cache Eviction:
+- None
+- Mutex
+- Lockfree queue and hashmap (WIP)
+
 Filesystem:
-- `std::filesystem`
-- `open` (WIP)
+- `sendfile`
 - `sqlite` (["SQLite does not compete with client/server databases. SQLite competes with fopen()."](https://www.sqlite.org/whentouse.html#:~:text=SQLite%20competes%20with%20fopen()))
 
 ## Compilation and Usage
 
-Building this project requires the following packages:
+In addition to the included submodules, building this project requires the following packages:
 
 ```
 openssl sparsehash sqlite3
 ```
 
 Depending on your distribution, you may need to install the `-devel` versions of these packages.
+
+## Design
+
+The system and its components are chosen to minimise latency where possible (where deemed infeasible, comments are added explaining design choices). Static polymorphism is used throughout and virtual methods are avoided.
 
 ## Results
 
