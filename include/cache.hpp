@@ -50,7 +50,7 @@ class BaseCache {
 
   public:
   BaseCache(const fs::path &srv, unsigned int _ndocs) : ndocs(_ndocs), backend(srv) {}
-  ll send(const std::vector<char> &id, const int fd);
+  ll send(const std::string &idstr, const int fd);
 };
 
 CACHE_TEMPLATE
