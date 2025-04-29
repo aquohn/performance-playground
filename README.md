@@ -1,6 +1,6 @@
 # A playground for optimisation techniques
 
-This codebase implements a simple system: a fileserver serving files according to a dead simple protocol, with a FIFO cache. However, it is also meant to be an exercise in using different features of modern C++ (up to C++20), and a testbed for comparing different techniques for implementing this system. The backends used to implement the various components of the system are:
+This codebase implements a simple system: a fileserver serving files according to a dead simple protocol, with an LRU cache. However, it is also meant to be an exercise in using different features of modern C++ (up to C++20), and a testbed for comparing different techniques for implementing this system. The backends used to implement the various components of the system are:
 
 Networking:
 - `epoll`
@@ -31,6 +31,8 @@ openssl sparsehash sqlite3
 ```
 
 Depending on your distribution, you may need to install the `-devel` versions of these packages.
+
+TODO
 
 ## Design
 
