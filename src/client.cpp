@@ -252,9 +252,11 @@ int main(int argc, char *argv[]) {
                 [=](const double x) { return pow(x - rtt_avg, 2); });
   double rtt_stddev =
       std::accumulate(rtts.begin(), rtts.end(), 0) / (rtts.size() - 1.5);
+  auto maxit = std::max_element(rtts.begin(), rtts.end());
+  double rtt_max = (maxit == rtts.end()) ? 0. : *maxit;
 
-  std::cout << std::format("RTT {:.2f} +/- {:.2f} ms\tErrors {} / {} ({:.1f}%)\n",
-                           rtt_avg, rtt_stddev, errors, total,
+  std::cout << std::format("RTT {:.2f} +/- {:.2f} ms\tWorst {:.2f} ms\tErrors {} / {} ({:.1f}%)\n",
+                           rtt_avg, rtt_stddev, rtt_max, errors, total,
                            100 * errors / (double) total);
 
   return 0;
