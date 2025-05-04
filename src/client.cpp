@@ -112,15 +112,24 @@ private:
       return;
     hash_t fhash = sha256(buf);
 
-    ++(record->real);
     auto startt = std::chrono::steady_clock::now();
-    send(sockfd, id.c_str(), id.size(), 0);
+    if (send(sockfd, id.c_str(), id.size(), 0) < 0) {
+      pp::log_error("error on write: {}\n", strerror(errno));
+      return;
+    }
     ll rsz = recv(sockfd, buf.data(), fsz, MSG_WAITALL);
     auto endt = std::chrono::steady_clock::now();
+
+    ++(record->real);
     hash_t rhash = sha256(buf);
 
     if (rsz < 0) {
-      ++(record->incorrect);
+      if (errno == EINTR) {
+        // do not count/evaluate interrupted txn
+        --(record->real);
+      } else {
+        ++(record->incorrect);
+      }
       pp::log_error("error on read: {}\n", strerror(errno));
     } else if (rsz != (ll)fsz) {
       ++(record->incorrect);
@@ -152,12 +161,19 @@ private:
 
     std::vector<char> buf(SERVER_RESP_SZ);
     auto startt = std::chrono::steady_clock::now();
-    send(sockfd, id.c_str(), id.size(), 0);
-    [[maybe_unused]] ll rsz = read(sockfd, buf.data(), SERVER_RESP_SZ);
+    if (send(sockfd, id.c_str(), id.size(), 0) < 0) {
+      pp::log_error("error on write: {}\n", strerror(errno));
+      return;
+    }
+    ll rsz = recv(sockfd, buf.data(), SERVER_RESP_SZ, 0);
+    if (rsz < 0) {
+      pp::log_error("error on read: {}\n", strerror(errno));
+      return;
+    }
     auto endt = std::chrono::steady_clock::now();
     record->rtts.push_back(endt - startt);
 
-    // TODO check that correct response is returned
+    // TODO check that correct response is returned and account for EINTR
   }
 
 public:
@@ -183,7 +199,6 @@ public:
 };
 
 void request_thread(ClientConfig config, Record *record) {
-  std::signal(SIGINT, SIG_IGN);
   Requestor R(record, &(config.index), &(config.server_addr));
   std::random_device rd;
   std::mt19937 prng = std::mt19937(rd());
