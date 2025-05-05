@@ -45,7 +45,8 @@ int main(int argc, char *argv[]) {
     pp::fatal_error("Socket construction failed: {}\n", strerror(errno));
   }
 #ifdef DEBUG
-  if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEPORT, NULL, 0) < 0) {
+  int optval = 1;
+  if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEPORT, &optval, sizeof(optval)) < 0) {
     pp::fatal_error("setsockopt failed: {}\n", strerror(errno));
   }
 #endif
