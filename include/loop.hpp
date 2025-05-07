@@ -20,7 +20,7 @@
 #define EPOLL_TIMEOUT_MS -1
 #define GC_INTERVAL_MS 1000
 
-#define LOOP_TEMPLATE                                                          \
+#define LOOP_REQ_TEMPLATE                                                          \
   template <template <typename, typename> typename Map, typename Cache>        \
     requires HashMap<Map, int, std::vector<char>> && DocCache<Cache>
 
@@ -33,7 +33,7 @@ struct SocketGC {
   void gc();
 };
 
-LOOP_TEMPLATE
+LOOP_REQ_TEMPLATE
 struct EpollLoop {
   struct epoll_event ev;
   int epollfd, nev, sockfd;
@@ -42,8 +42,8 @@ struct EpollLoop {
   std::jthread gcthread;
   ll handled = 0;
 
-  EpollLoop(fs::path &srv, unsigned int ndocs)
-      : cache(srv, ndocs), gcthread(&SocketGC::gc, &sockgc) {}
+  EpollLoop(const fs::path &srv, unsigned int cache_capacity)
+      : cache(srv, cache_capacity), gcthread(&SocketGC::gc, &sockgc) {}
   void loop(int _sockfd);
 
 private:
@@ -62,7 +62,7 @@ private:
   }
 };
 
-LOOP_TEMPLATE
+LOOP_REQ_TEMPLATE
 void EpollLoop<Map, Cache>::loop(int _sockfd) {
   sockfd = _sockfd;
   epollfd = epoll_create1(0), nev = 1;

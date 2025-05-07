@@ -20,12 +20,12 @@ concept DocCache = std::constructible_from<C, const fs::path &, unsigned int> &&
                      { cache.send(idstr, fd) } -> std::convertible_to<ll>;
                    };
 
-#define CACHE_TEMPLATE                                                         \
+#define CACHE_REQ_TEMPLATE                                                         \
   template <template <typename, typename> typename Map, typename Backend>      \
     requires HashMap<Map, std::string, std::vector<char>> &&                   \
              FileBackend<Backend>
 
-CACHE_TEMPLATE
+CACHE_REQ_TEMPLATE
 class BaseCache {
 protected:
   ull ndocs;
@@ -37,7 +37,7 @@ public:
   ll send(const std::string &idstr, const int fd);
 };
 
-CACHE_TEMPLATE &&HashMap<Map, std::string, ull> struct MutexCache
+CACHE_REQ_TEMPLATE &&HashMap<Map, std::string, ull> struct MutexCache
     : protected BaseCache<Map, Backend> {
 protected:
   std::jthread gcthread;
@@ -77,7 +77,7 @@ public:
         gcthread(&MutexCache<Map, Backend>::gc, this) {}
 };
 
-CACHE_TEMPLATE
+CACHE_REQ_TEMPLATE
 ll BaseCache<Map, Backend>::send(const std::string &idstr, const int fd) {
   if (cache_be.contains(idstr)) {
     std::vector<char> &buf = cache_be[idstr];

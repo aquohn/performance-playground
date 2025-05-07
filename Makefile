@@ -17,7 +17,7 @@ else
 endif
 
 LIBFLAGS = -lcrypto
-CPPFLAGS = -std=c++20 -Wall -I$(INCDIR) -L$(LIBDIR) $(LIBFLAGS) $(DBGFLAGS)
+CPPFLAGS = -std=c++20 -Wall -I$(INCDIR) -L$(LIBDIR) $(LIBFLAGS) $(DBGFLAGS) -fdiagnostics-all-candidates
 
 .PHONY: all clean
 
