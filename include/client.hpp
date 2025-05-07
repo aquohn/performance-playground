@@ -15,6 +15,7 @@ struct Index {
   std::vector<std::string> ids;
   std::unordered_set<std::string> id_set;
 
+  Index();
   Index(fs::path srv);
 };
 
@@ -29,6 +30,6 @@ struct ClientConfig {
   Index index;
   struct sockaddr_in server_addr;
 
-  ClientConfig(char *argv[]);
+  ClientConfig(int argc, char *argv[]);
 };
 

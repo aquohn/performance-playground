@@ -14,6 +14,9 @@
 
 #define SERVER_RESP_SZ 1
 
+static constexpr char usage[] = "Usage: {} [-a avg sleep ms] [-d sleep stddev ms] [-r num requestors] [-n num reps per requestor] <server addr> <content directory>\n";
+
+Index::Index() = default;
 Index::Index(fs::path srv) {
   fs::directory_entry srv_ent(srv);
   if (!srv_ent.is_directory()) {
@@ -31,40 +34,65 @@ Index::Index(fs::path srv) {
   }
 }
 
-ClientConfig::ClientConfig(char *argv[]) : index(Index(fs::path(argv[2]))) {
-  // TODO getopt for this
+ClientConfig::ClientConfig(int argc, char *argv[]) {
   sleep_avg_ms = 100.;
   sleep_stddev_ms = 50.;
-  server_addr.sin_family = AF_INET;
-  int ret;
+  reqs = 10;
+  reps = 30;
 
-  std::string server_str(argv[1]);
-  auto delim_it = std::next(server_str.begin(), server_str.find(':'));
-  ret = inet_pton(AF_INET, std::string(server_str.begin(), delim_it).data(),
-                  &server_addr.sin_addr);
-  if (ret == 0) {
-    pp::fatal_error("Invalid address.\n");
-  } else if (ret < 0) {
+  std::stringstream ss;
+  int opt;
+  while ((opt = getopt(argc, argv, "a:d:r:n:")) != -1) {
+    switch (opt) {
+      case 'a':
+        ss.str(optarg);
+        ss >> sleep_avg_ms;
+        break;
+      case 'd':
+        ss.str(optarg);
+        ss >> sleep_stddev_ms;
+        break;
+      case 'r':
+        ss.str(optarg);
+        ss >> reqs;
+        break;
+      case 'n':
+        ss.str(optarg);
+        ss >> reps;
+        break;
+      default:
+        pp::fatal_error(usage, argv[0]);
+    }
+    if (ss.bad() || ss.fail()) {
+      pp::fatal_error("Parsing -{} failed.\n", opt);
+    }
+    ss.clear();
+  }
+
+  if (optind + 2 > argc) {
+    pp::log_error("Insufficient arguments provided (expected 2, got {}).\n", argc - optind);
+    pp::fatal_error(usage, argv[0]);
+  }
+
+  server_addr.sin_family = AF_INET;
+  std::string server_str(argv[optind++]);
+  auto delim_pos = server_str.find(':');
+  if (delim_pos == std::string::npos) {
+    pp::fatal_error("Port delimiter not found in {}.\n", server_str);
+  }
+  auto delim_it = std::next(server_str.begin(), delim_pos);
+  if (inet_pton(AF_INET, std::string(server_str.begin(), delim_it).data(),
+                &server_addr.sin_addr) <= 0) {
     pp::fatal_error("Address parsing failed: {}\n", strerror(errno));
   }
   ++delim_it;
-  std::stringstream port_stream(std::string(delim_it, server_str.end()));
-  port_stream >> server_addr.sin_port;
-  if (port_stream.bad() || port_stream.fail()) {
+  ss.str(std::string(delim_it, server_str.end()));
+  ss >> server_addr.sin_port;
+  if (ss.bad() || ss.fail()) {
     pp::fatal_error("Port parsing from {} failed.\n", server_str);
   }
 
-  std::stringstream req_stream(argv[3]);
-  req_stream >> reqs;
-  if (req_stream.bad() || req_stream.fail()) {
-    pp::fatal_error("Requestor count parsing failed.\n");
-  }
-
-  std::stringstream rep_stream(argv[4]);
-  rep_stream >> reps;
-  if (rep_stream.bad() || rep_stream.fail()) {
-    pp::fatal_error("Repetition count parsing failed.\n");
-  }
+  index = Index(fs::path(argv[optind++]));
 }
 
 static std::atomic<int> cleanup = 0;
@@ -133,7 +161,8 @@ private:
       pp::log_error("error on read: {}\n", strerror(errno));
     } else if (rsz != (ll)fsz) {
       ++(record->incorrect);
-      pp::log_error("incorrect size for {} (expected {}, got {})\n", id, fsz, rsz);
+      pp::log_error("incorrect size for {} (expected {}, got {})\n", id, fsz,
+                    rsz);
     } else if (fhash != rhash) {
       pp::log_error("corrupted data for {}\n", id);
       ++(record->incorrect);
@@ -219,12 +248,7 @@ void request_thread(ClientConfig config, Record *record) {
 void notify_cleanup(int signum) { cleanup.store(1); }
 
 int main(int argc, char *argv[]) {
-  if (argc != 5) {
-    pp::fatal_error("Usage: {} <server addr:port> <content directory> "
-                    "<requestor count> <reps>\n",
-                    argv[0]);
-  }
-  ClientConfig config(argv);
+  ClientConfig config(argc, argv);
 
   std::signal(SIGINT, notify_cleanup);
   std::vector<std::jthread> threads;
@@ -255,9 +279,10 @@ int main(int argc, char *argv[]) {
   auto maxit = std::max_element(rtts.begin(), rtts.end());
   double rtt_max = (maxit == rtts.end()) ? 0. : *maxit;
 
-  std::cout << std::format("RTT {:.2f} +/- {:.2f} ms\tWorst {:.2f} ms\tErrors {} / {} ({:.1f}%)\n",
-                           rtt_avg, rtt_stddev, rtt_max, errors, total,
-                           100 * errors / (double) total);
+  std::cout << std::format(
+      "RTT {:.2f} +/- {:.2f} ms\tWorst {:.2f} ms\tErrors {} / {} ({:.1f}%)\n",
+      rtt_avg, rtt_stddev, rtt_max, errors, total,
+      100 * errors / (double)total);
 
   return 0;
 }
