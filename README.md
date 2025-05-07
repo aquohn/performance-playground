@@ -32,7 +32,15 @@ openssl sparsehash sqlite3
 
 Depending on your distribution, you may need to install the `-devel` versions of these packages.
 
-TODO
+The usages for the server and client are as follows:
+
+```
+Usage: ./build/server name> -l <loop> -r <request map> -c <cache eviction> -m <cache map> -f <file backend> [ -n cache capacity ] <port> <content directory>
+```
+
+```
+Usage: ./build/client [-a avg sleep ms] [-d sleep stddev ms] [-r num requestors] [-n num reps per requestor] <server addr> <content directory>
+``
 
 ## Design
 

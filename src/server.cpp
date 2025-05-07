@@ -21,7 +21,12 @@
 
 static constexpr char usage[] =
     "Usage: {} -l <loop> -r <request map> -c <cache eviction> -m <cache map> "
-    "-f <file backend> [ -n cache capacity ] <port> <content directory>\n";
+    "-f <file backend> [ -n cache capacity ] <port> <content directory>\n"
+    "supported -l: epoll\n"
+    "supported -r: umap\n"
+    "supported -c: none, mutex\n"
+    "supported -m: umap\n"
+    "supported -f: filesystem\n";
 
 #define SINGLE_ARG(...) __VA_ARGS__
 #define USE_BACKEND(params, name, key, backend)                                \
@@ -136,7 +141,8 @@ void loop(playground<Loop, RMap, Cache> play, const ServerConfig &config,
 }
 template <LOOP_TEMPLATE Loop, MAP_TEMPLATE RMap>
 void loop(playground<Loop, RMap> play, const ServerConfig &config, int sockfd) {
-  USE_BACKEND(SINGLE_ARG(Loop, RMap, ), cache, "mutex", MutexCache)
+  USE_BACKEND(SINGLE_ARG(Loop, RMap, ), cmap, "mutex", MutexCache)
+  else USE_BACKEND(SINGLE_ARG(Loop, RMap, ), cmap, "none", BaseCache)
   else EXIT_MISSING_BACKEND(cache, Cache eviction)
 }
 template <LOOP_TEMPLATE Loop>
