@@ -40,7 +40,7 @@ Usage: ./build/server name> -l <loop> -r <request map> -c <cache eviction> -m <c
 
 ```
 Usage: ./build/client [-a avg sleep ms] [-d sleep stddev ms] [-r num requestors] [-n num reps per requestor] <server addr> <content directory>
-``
+```
 
 ## Design
 
