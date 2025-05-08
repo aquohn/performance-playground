@@ -1,5 +1,6 @@
 #pragma once
 
+#include <limits>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -33,6 +34,15 @@ concept FileBackend = std::constructible_from<T, const fs::path &> &&
                       };
 
 // Maps
+
+template <typename K, typename V>
+struct TrivialMap {
+  V devnull;
+  bool contains(const K &k) { return false; }
+  V& operator[](const K &k) { return devnull; }
+  void erase(const K &k) {}
+  ull size() { return std::numeric_limits<ull>::max(); }
+};
 
 template <typename K, typename V>
 struct UMap : public std::unordered_map<K, V> {

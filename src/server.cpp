@@ -34,14 +34,14 @@ static constexpr char usage[] =
     playground<params backend> play;                                           \
     loop(play, config, sockfd);                                                \
   }
-#define EXIT_MISSING_BACKEND(name, Desc)                                       \
+#define EXIT_MISSING_BACKEND(name, desc)                                       \
   {                                                                            \
     if (config.name.size() == 0) {                                             \
       pp::log_error(usage, "<program name>");                                  \
-      pp::fatal_error(#Desc " implementation not specified.\n");               \
+      pp::fatal_error(desc " implementation not specified.\n");               \
     } else {                                                                   \
       pp::log_error(usage, "<program name>");                                  \
-      pp::fatal_error(#Desc " implementation {} unknown\n", config.name);      \
+      pp::fatal_error(desc " implementation {} unknown\n", config.name);      \
     }                                                                          \
   }
 
@@ -131,30 +131,31 @@ void loop(playground<Loop, RMap, Cache, CMap> play, const ServerConfig &config,
           int sockfd) {
   USE_BACKEND(SINGLE_ARG(Loop, RMap, Cache, CMap, ), filebe, "filesystem",
               FSBackend)
-  else EXIT_MISSING_BACKEND(filebe, File backend)
+  else EXIT_MISSING_BACKEND(filebe, "File backend")
 }
 template <LOOP_TEMPLATE Loop, MAP_TEMPLATE RMap, CACHE_TEMPLATE Cache>
 void loop(playground<Loop, RMap, Cache> play, const ServerConfig &config,
           int sockfd) {
   USE_BACKEND(SINGLE_ARG(Loop, RMap, Cache, ), cmap, "umap", UMap)
   else USE_BACKEND(SINGLE_ARG(Loop, RMap, Cache, ), cmap, "khash", KHashMap)
-  else EXIT_MISSING_BACKEND(rmap, Cache mapping)
+  else USE_BACKEND(SINGLE_ARG(Loop, RMap, Cache, ), cmap, "none", TrivialMap)
+  else EXIT_MISSING_BACKEND(rmap, "Cache mapping")
 }
 template <LOOP_TEMPLATE Loop, MAP_TEMPLATE RMap>
 void loop(playground<Loop, RMap> play, const ServerConfig &config, int sockfd) {
-  USE_BACKEND(SINGLE_ARG(Loop, RMap, ), cmap, "mutex", MutexCache)
-  else USE_BACKEND(SINGLE_ARG(Loop, RMap, ), cmap, "none", BaseCache)
-  else EXIT_MISSING_BACKEND(cache, Cache eviction)
+  USE_BACKEND(SINGLE_ARG(Loop, RMap, ), cache, "mutex", MutexCache)
+  else USE_BACKEND(SINGLE_ARG(Loop, RMap, ), cache, "none", BaseCache)
+  else EXIT_MISSING_BACKEND(cache, "Cache eviction")
 }
 template <LOOP_TEMPLATE Loop>
 void loop(playground<Loop> play, const ServerConfig &config, int sockfd) {
   USE_BACKEND(SINGLE_ARG(Loop, ), rmap, "umap", UMap)
   else USE_BACKEND(SINGLE_ARG(Loop, ), rmap, "khash", KHashMap)
-  else EXIT_MISSING_BACKEND(rmap, Request mapping)
+  else EXIT_MISSING_BACKEND(rmap, "Request mapping")
 }
 void loop(const ServerConfig &config, int sockfd) {
   USE_BACKEND(, loop, "epoll", EpollLoop)
-  else EXIT_MISSING_BACKEND(loop, Loop)
+  else EXIT_MISSING_BACKEND(loop, "Loop")
 }
 
 int main(int argc, char *argv[]) {
