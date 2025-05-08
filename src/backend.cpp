@@ -1,13 +1,17 @@
 #include <cstring>
 
-#include <sys/sendfile.h>
 #include <fcntl.h>
+#include <sys/sendfile.h>
 
+#include "backend.hpp"
 #include "cache.hpp"
+
+#include "klib/khashl.h"
 
 FSBackend::FSBackend(const fs::path &srv) : dpath(srv) {}
 
-ll FSBackend::send_and_cache(const std::string &idstr, const int fd, std::vector<char> &buf) {
+ll FSBackend::send_and_cache(const std::string &idstr, const int fd,
+                             std::vector<char> &buf) {
   fs::path fpath;
   if (!find_pdf(dpath / idstr, fpath)) {
     return -1;
@@ -43,3 +47,4 @@ ll FSBackend::send_and_cache(const std::string &idstr, const int fd, std::vector
   return sent;
 }
 
+uint32_t kh_hash_string::operator()(const std::string &s) { return kh_hash_str(s.c_str()); }

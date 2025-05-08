@@ -25,7 +25,7 @@ static constexpr char usage[] =
     "supported -l: epoll\n"
     "supported -r: umap\n"
     "supported -c: none, mutex\n"
-    "supported -m: umap\n"
+    "supported -m: umap, khash\n"
     "supported -f: filesystem\n";
 
 #define SINGLE_ARG(...) __VA_ARGS__
@@ -137,6 +137,7 @@ template <LOOP_TEMPLATE Loop, MAP_TEMPLATE RMap, CACHE_TEMPLATE Cache>
 void loop(playground<Loop, RMap, Cache> play, const ServerConfig &config,
           int sockfd) {
   USE_BACKEND(SINGLE_ARG(Loop, RMap, Cache, ), cmap, "umap", UMap)
+  else USE_BACKEND(SINGLE_ARG(Loop, RMap, Cache, ), cmap, "khash", KHashMap)
   else EXIT_MISSING_BACKEND(rmap, Cache mapping)
 }
 template <LOOP_TEMPLATE Loop, MAP_TEMPLATE RMap>
@@ -148,6 +149,7 @@ void loop(playground<Loop, RMap> play, const ServerConfig &config, int sockfd) {
 template <LOOP_TEMPLATE Loop>
 void loop(playground<Loop> play, const ServerConfig &config, int sockfd) {
   USE_BACKEND(SINGLE_ARG(Loop, ), rmap, "umap", UMap)
+  else USE_BACKEND(SINGLE_ARG(Loop, ), rmap, "khash", KHashMap)
   else EXIT_MISSING_BACKEND(rmap, Request mapping)
 }
 void loop(const ServerConfig &config, int sockfd) {

@@ -9,8 +9,8 @@ Networking:
 
 Cache:
 - `std::unordered_map`
+- `khash` (potential memory leak due to upstream issues)
 - None (WIP)
-- `khash` (WIP)
 - Google `sparsehash` (WIP)
 
 Cache Eviction:
