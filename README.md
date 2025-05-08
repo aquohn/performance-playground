@@ -40,12 +40,27 @@ Usage: ./build/server name> -l <loop> -r <request map> -c <cache eviction> -m <c
 
 ```
 Usage: ./build/client [-a avg sleep ms] [-d sleep stddev ms] [-r num requestors] [-n num reps per requestor] <server addr> <content directory>
-``
+```
+
+Currently, the supported format for the content directory is a set of subdirectories with a distinct 8-character identifier, with characters from the set `[A-Z0-9]`, and with a single `.pdf` file under each subdirectory. This is the format of my Zotero storage directory. A plugin system to support other content directory formats is being developed, although this would unavoidably require the use of virtual methods.
 
 ## Design
 
-The system and its components are chosen to minimise latency where possible (where deemed infeasible, comments are added explaining design choices). Static polymorphism is used throughout and virtual methods are avoided.
+The server and its components are designed to minimise latency where possible (where deemed infeasible, comments are added explaining design choices). Static polymorphism is used throughout and virtual methods are avoided. Template metaprogramming is used to instantiate all possible combinations of components at compile time to allow dynamic selection of backends without sacrificing performance.
+
+The components for the network loop, cache eviction policy, file access backend, and mappings used by the cache all have their API constrained by concepts, enforcing the interface between them without the costs of dynamic polymorphism.
+
+The client consists of a number of requestor threads, which will make a fixed, total number of requests to the server and sleep for a random, configurable time. The mean, standard deviation, and worst round-trip latency are reported when the client exits.
 
 ## Results
 
-TODO
+Results measured with 10 requestor threads requesting 30 documents over loopback.
+
+|Loop   |Requests|Cache Eviction|Cache Map|File Backend|Avg (ms)        |Worst (ms)        |
+|---    |---     |---           |---      |---         |---             |---               |
+|`epoll`|`umap`  |`mutex`       |`none`   |`filesystem`|0.51 +/- 0.52   |26.26             |
+|`epoll`|`umap`  |`mutex`       |`umap`   |`filesystem`|1.10 +/- 1.11   |46.33             |
+|`epoll`|`umap`  |`none`        |`none`   |`filesystem`|0.30 +/- 0.30   |22.25             |
+|`epoll`|`umap`  |`none`        |`umap`   |`filesystem`|0.58 +/- 0.58   |23.37             |
+
+Disabling caching actually improves average and worst-case latency. However, as the performance is similar to the cases with no cache eviction, this is likely due to not needing to run the GC thread to evict the cache entries. Caching itself does not seem to give much benefit, likely since the access patterns have not (yet!) been tuned to follow an LRU distribution which would work better with the cache.
